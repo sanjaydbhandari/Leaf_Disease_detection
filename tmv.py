@@ -208,6 +208,45 @@ def detect_curls(contour, curvature, threshold):
 #
 #     return image
 
+def detect_leaf_curl(image):
+    # Convert image to grayscale
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+
+    # Apply Gaussian blur to reduce noise
+    blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+
+    # Perform edge detection
+    edges = cv2.Canny(blurred, 50, 150)
+
+    # Find contours in the edge-detected image
+    contours, _ = cv2.findContours(edges.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+    # Iterate through the contours
+    curled_regions = []
+    for contour in contours:
+        # Approximate the contour to a polygon
+        epsilon = 0.01 * cv2.arcLength(contour, True)
+        approx = cv2.approxPolyDP(contour, epsilon, True)
+
+        # Calculate the area of the contour
+        area = cv2.contourArea(contour)
+
+        # If the contour area is small, it might be noise, ignore it
+        if area < 100:
+            continue
+
+        # Compute the bounding box for the contour
+        x, y, w, h = cv2.boundingRect(contour)
+
+        # Compute aspect ratio to distinguish between long and narrow shapes
+        aspect_ratio = float(w) / h
+
+        # Check if aspect ratio is greater than a threshold (indicating curling)
+        if aspect_ratio > 2:
+            curled_regions.append((x, y, x + w, y + h))
+
+    return curled_regions
+
 @app.route('/detect-yellow', methods=["POST"])
 def tmv():
     folder_path = './Detection/Yellow_detection/input_T'
@@ -228,12 +267,11 @@ def tmv():
         img_path = os.path.join(folder_path, filename)
         image = cv2.imread(img_path)
         image = removeBg(image)
-
-        edges_detected=detect_and_mark_curling(image)
+        img = cv2.imdecode(np.frombuffer(image, np.uint8), cv2.IMREAD_COLOR)
+        edges_detected=detect_leaf_curl(img)
 
         # if not edges_detected:
         #     print("yello",filename,"\n \n \n \n")
-
 
         output_path = os.path.join(correct_folder, filename)
         cv2.imwrite(output_path, edges_detected)
